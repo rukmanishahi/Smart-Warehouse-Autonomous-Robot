@@ -74,3 +74,6 @@ a plug and play drop-in before it runs on your actual robot you'll need to:
 
 // Drop confirmation sensor (IR break-beam or microswitch at bin)
 #define DROP_CONFIRM_PIN 4
+
+<img width="4096" height="3072" alt="image" src="https://github.com/user-attachments/assets/d77a138c-ef9d-49fd-baca-f8a5fd816da4" />
+
