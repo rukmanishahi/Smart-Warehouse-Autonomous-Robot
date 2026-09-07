@@ -1,75 +1,4 @@
-/*
- * TEMPEST AMR — ESP32 Low-Level Firmware
- * SIH26112 — Modular AMR Platform for Smart Warehouse Automation
- *
- * Responsibilities (real-time / hardware layer):
- *   - Differential-drive motor control (PWM)
- *   - Quadrature encoder reading (odometry / distance-based moves)
- *   - Obstacle sensor (ultrasonic) — safety stop
- *   - Load cell (HX711) — weight feedback
- *   - Attachment identification (analog ID pin on the attachment connector)
- *   - Actuator control (servo gripper / diverter) with drop confirmation
- *   - Serial command protocol to talk to the Python "brain"
- *
- * Protocol (line-based, newline terminated):
- *   Host -> ESP32:
- *     MOVE_BIN_<n>      e.g. MOVE_BIN_3   -> drive to preset bin position n
- *     PICK                                -> close gripper / engage attachment
- *     DROP                                -> open gripper / release load
- *     STOP                                -> emergency stop
- *     GET_STATUS                          -> request one status line
- *
- *   ESP32 -> Host:
- *     ACK                                 -> command received
- *     DONE                                -> action completed successfully
- *     ERROR,<reason>                      -> action failed (e.g. obstacle, timeout)
- *     STATUS,DIST:<cm>,LOAD:<g>,ATTACH:<id>
- *
- * Install libraries (Arduino Library Manager):
- *   - HX711 (bogde/HX711) for the load cell
- *   - ESP32Servo for the actuator
- */
-
-#include <HX711.h>
-#include <ESP32Servo.h>
-
-// ---------------- Pin map ----------------
-// Motor driver (e.g. L298N / TB6612) — left & right
-#define L_IN1 25
-#define L_IN2 26
-#define L_PWM 27
-#define R_IN1 14
-#define R_IN2 12
-#define R_PWM 13
-
-// Quadrature encoders (interrupt-capable pins)
-#define L_ENC_A 34
-#define L_ENC_B 35
-#define R_ENC_A 32
-#define R_ENC_B 33
-
-// Ultrasonic obstacle sensor (HC-SR04)
-#define TRIG_PIN 5
-#define ECHO_PIN 18
-#define OBSTACLE_STOP_CM 15.0
-
-// Load cell (HX711)
-#define HX711_DT 19
-#define HX711_SCK 23
-
-// Attachment ID line (each attachment presents a distinct voltage via
-// a resistor divider on its connector; ADC read maps to an ID)
-#define ATTACH_ID_PIN 36
-
-// Actuator (gripper / diverter servo)
-#define SERVO_PIN 15
-#define SERVO_PICK_ANGLE 120
-#define SERVO_DROP_ANGLE 20
-
-// Drop confirmation sensor (IR break-beam or microswitch at bin)
-#define DROP_CONFIRM_PIN 4
-
-// ---------------- Robot / encoder constants ----------------
+// ---------------- Robot/encoder constants ----------------
 const float WHEEL_DIAMETER_CM = 6.5;
 const int ENCODER_TICKS_PER_REV = 20;
 const float CM_PER_TICK = (PI * WHEEL_DIAMETER_CM) / ENCODER_TICKS_PER_REV;
@@ -98,33 +27,25 @@ void IRAM_ATTR onRightEncoder() { rightTicks += digitalRead(R_ENC_B) ? 1 : -1; }
 // ---------------- Setup ----------------
 void setup() {
   Serial.begin(115200);
-
   pinMode(L_IN1, OUTPUT); pinMode(L_IN2, OUTPUT); pinMode(L_PWM, OUTPUT);
   pinMode(R_IN1, OUTPUT); pinMode(R_IN2, OUTPUT); pinMode(R_PWM, OUTPUT);
-
   pinMode(L_ENC_A, INPUT); pinMode(L_ENC_B, INPUT);
   pinMode(R_ENC_A, INPUT); pinMode(R_ENC_B, INPUT);
   attachInterrupt(digitalPinToInterrupt(L_ENC_A), onLeftEncoder, RISING);
   attachInterrupt(digitalPinToInterrupt(R_ENC_A), onRightEncoder, RISING);
-
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
   pinMode(DROP_CONFIRM_PIN, INPUT_PULLUP);
-
   scale.begin(HX711_DT, HX711_SCK);
   scale.set_scale(420.0);   // calibration factor — tune per load cell
   scale.tare();
-
   actuator.attach(SERVO_PIN);
   actuator.write(SERVO_DROP_ANGLE);
-
   stopMotors();
   Serial.println("READY");
 }
-
 // ---------------- Main loop ----------------
 String inputLine;
-
 void loop() {
   while (Serial.available()) {
     char c = Serial.read();
