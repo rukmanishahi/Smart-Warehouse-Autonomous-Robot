@@ -46,3 +46,76 @@ a plug and play drop-in before it runs on your actual robot you'll need to:
   planning (ROS 2 Nav2) once you move from single-line paths to a full warehouse map.
 - Calibrate the `ATTACH_ID_PIN` voltage bands to whatever resistor values you
   put on each physical attachment.
+
+
+
+
+## FOR THE ESP32 FILMWARE LOGIC MAP
+
+/*
+ * Responsibilities (real-time / hardware layer):
+ *   - Differential-drive motor control (PWM)
+ *   - Quadrature encoder reading (odometry / distance-based moves)
+ *   - Obstacle sensor (ultrasonic) — safety stop
+ *   - Load cell (HX711) — weight feedback
+ *   - Attachment identification (analog ID pin on the attachment connector)
+ *   - Actuator control (servo gripper / diverter) with drop confirmation
+ *   - Serial command protocol to talk to the Python "brain"
+ *
+ * Protocol (line-based, newline terminated):
+ *   Host -> ESP32:
+ *     MOVE_BIN_<n>      e.g. MOVE_BIN_3   -> drive to preset bin position n
+ *     PICK                                -> close gripper / engage attachment
+ *     DROP                                -> open gripper / release load
+ *     STOP                                -> emergency stop
+ *     GET_STATUS                          -> request one status line
+ *
+ *   ESP32 -> Host:
+ *     ACK                                 -> command received
+ *     DONE                                -> action completed successfully
+ *     ERROR,<reason>                      -> action failed (e.g. obstacle, timeout)
+ *     STATUS,DIST:<cm>,LOAD:<g>,ATTACH:<id>
+ *
+ * Install libraries (Arduino Library Manager):
+ *   - HX711 (bogde/HX711) for the load cell
+ *   - ESP32Servo for the actuator
+ */
+
+#include <HX711.h>
+#include <ESP32Servo.h>
+
+// ---------------- Pin map ----------------
+// Motor driver (e.g. L298N / TB6612) — left & right
+#define L_IN1 25
+#define L_IN2 26
+#define L_PWM 27
+#define R_IN1 14
+#define R_IN2 12
+#define R_PWM 13
+
+// Quadrature encoders (interrupt-capable pins)
+#define L_ENC_A 34
+#define L_ENC_B 35
+#define R_ENC_A 32
+#define R_ENC_B 33
+
+// Ultrasonic obstacle sensor (HC-SR04)
+#define TRIG_PIN 5
+#define ECHO_PIN 18
+#define OBSTACLE_STOP_CM 15.0
+
+// Load cell (HX711)
+#define HX711_DT 19
+#define HX711_SCK 23
+
+// Attachment ID line (each attachment presents a distinct voltage via
+// a resistor divider on its connector; ADC read maps to an ID)
+#define ATTACH_ID_PIN 36
+
+// Actuator (gripper / diverter servo)
+#define SERVO_PIN 15
+#define SERVO_PICK_ANGLE 120
+#define SERVO_DROP_ANGLE 20
+
+// Drop confirmation sensor (IR break-beam or microswitch at bin)
+#define DROP_CONFIRM_PIN 4
