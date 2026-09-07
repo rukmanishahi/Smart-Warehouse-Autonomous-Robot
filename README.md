@@ -51,69 +51,24 @@ a plug and play drop-in before it runs on your actual robot you'll need to:
 
 
 ## FOR THE ESP32 FILMWARE LOGIC MAP
-
-/*
- * Responsibilities (real-time/hardware layer):
- *   - Differential-drive motor control (PWM)
- *   - Quadrature encoder reading (odometry/distance-based moves)
- *   - Obstacle sensor (ultrasonic)safety stop
- *   - Load cell (HX711) weight feedback
- *   - Attachment identification (analog ID pin on the attachment connector)
- *   - Actuator control (servo gripper/diverter) with drop confirmation
- *   - Serial command protocol to talk to the Python "brain"
+ * The ESP32 creates its OWN WiFi network (no router needed) and serves a
+ * simple control page with buttons. Connect your phone/laptop to that
+ * network, open a browser, and press buttons to drive the robot.
  *
- * Protocol (line-based, newline terminated):
- *   Host -> ESP32:
- *     MOVE_BIN_<n>      e.g. MOVE_BIN_3   -> drive to preset bin position n
- *     PICK                                -> close gripper/engage attachment
- *     DROP                                -> open gripper/release load
- *     STOP                                -> emergency stop
- *     GET_STATUS                          -> request one status line
- *
- *   ESP32 -> Host:
- *     ACK                                 -> command received
- *     DONE                                -> action completed successfully
- *     ERROR,<reason>                      -> action failed (e.g. obstacle,timeout)
- *     STATUS,DIST:<cm>,LOAD:<g>,ATTACH:<id>
+ * HOW TO USE:
+ *   1. Flash this file to your ESP32 (same steps as before — Arduino IDE,
+ *      select board + port, Upload).
+ *   2. Open Serial Monitor briefly (115200 baud) just to confirm it booted —
+ *      you'll see "Access Point started" and an IP address (usually 192.168.4.1).
+ *   3. On your phone or laptop, open WiFi settings and connect to the
+ *      network named "Tempest_AMR" (password: "tempest123").
+ *   4. Open a browser and go to:  http://192.168.4.1
+ *   5. You'll see buttons — tap them to control the robot.
  *
  * Install libraries (Arduino Library Manager):
- *   - HX711 (bogde/HX711) for the load cell
- *   - ESP32Servo for the actuator
- */
-
-#include <HX711.h>
-#include <ESP32Servo.h>
-
-// ---------------- Pin map ----------------
-// Motor driver (e.g. L298N / TB6612) left & right
-#define L_IN1 25
-#define L_IN2 26
-#define L_PWM 27
-#define R_IN1 14
-#define R_IN2 12
-#define R_PWM 13
-
-// Quadrature encoders (interrupt-capable pins)
-#define L_ENC_A 34
-#define L_ENC_B 35
-#define R_ENC_A 32
-#define R_ENC_B 33
-
-// Ultrasonic obstacle sensor (HC-SR04)
-#define TRIG_PIN 5
-#define ECHO_PIN 18
-#define OBSTACLE_STOP_CM 15.0
-
-// Load cell (HX711)
-#define HX711_DT 19
-#define HX711_SCK 23
-
-// Attachment ID line (each attachment presents a distinct voltage via
-// a resistor divider on its connector; ADC read maps to an ID)
-#define ATTACH_ID_PIN 36
-
-// Actuator (gripper/diverter servo)
-#define SERVO_PIN 15
+ *   - HX711 (bogde/HX711)
+ *   - ESP32Servo
+ *   (WiFi.h and WebServer.h come built-in with the ESP32 board package)  define SERVO_PIN 15
 #define SERVO_PICK_ANGLE 120
 #define SERVO_DROP_ANGLE 20
 
