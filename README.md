@@ -53,27 +53,27 @@ a plug and play drop-in before it runs on your actual robot you'll need to:
 ## FOR THE ESP32 FILMWARE LOGIC MAP
 
 /*
- * Responsibilities (real-time / hardware layer):
+ * Responsibilities (real-time/hardware layer):
  *   - Differential-drive motor control (PWM)
- *   - Quadrature encoder reading (odometry / distance-based moves)
- *   - Obstacle sensor (ultrasonic) — safety stop
- *   - Load cell (HX711) — weight feedback
+ *   - Quadrature encoder reading (odometry/distance-based moves)
+ *   - Obstacle sensor (ultrasonic)safety stop
+ *   - Load cell (HX711) weight feedback
  *   - Attachment identification (analog ID pin on the attachment connector)
- *   - Actuator control (servo gripper / diverter) with drop confirmation
+ *   - Actuator control (servo gripper/diverter) with drop confirmation
  *   - Serial command protocol to talk to the Python "brain"
  *
  * Protocol (line-based, newline terminated):
  *   Host -> ESP32:
  *     MOVE_BIN_<n>      e.g. MOVE_BIN_3   -> drive to preset bin position n
- *     PICK                                -> close gripper / engage attachment
- *     DROP                                -> open gripper / release load
+ *     PICK                                -> close gripper/engage attachment
+ *     DROP                                -> open gripper/release load
  *     STOP                                -> emergency stop
  *     GET_STATUS                          -> request one status line
  *
  *   ESP32 -> Host:
  *     ACK                                 -> command received
  *     DONE                                -> action completed successfully
- *     ERROR,<reason>                      -> action failed (e.g. obstacle, timeout)
+ *     ERROR,<reason>                      -> action failed (e.g. obstacle,timeout)
  *     STATUS,DIST:<cm>,LOAD:<g>,ATTACH:<id>
  *
  * Install libraries (Arduino Library Manager):
@@ -85,7 +85,7 @@ a plug and play drop-in before it runs on your actual robot you'll need to:
 #include <ESP32Servo.h>
 
 // ---------------- Pin map ----------------
-// Motor driver (e.g. L298N / TB6612) — left & right
+// Motor driver (e.g. L298N / TB6612) left & right
 #define L_IN1 25
 #define L_IN2 26
 #define L_PWM 27
@@ -112,7 +112,7 @@ a plug and play drop-in before it runs on your actual robot you'll need to:
 // a resistor divider on its connector; ADC read maps to an ID)
 #define ATTACH_ID_PIN 36
 
-// Actuator (gripper / diverter servo)
+// Actuator (gripper/diverter servo)
 #define SERVO_PIN 15
 #define SERVO_PICK_ANGLE 120
 #define SERVO_DROP_ANGLE 20
