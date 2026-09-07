@@ -1,5 +1,5 @@
-# Tempest AMR — Sorting Logic Reference Implementation
-SIH26112 — Modular AMR Platform for Smart Warehouse Automation
+# Tempest AMR for Sorting Logic Reference Implementation
+SIH26112  Modular AMR Platform for Smart Warehouse Automation
 
 This matches the architecture:
 
@@ -15,7 +15,7 @@ Camera/Sensor -> [Python: classify box]
 ## Layout
 ```
 esp32_firmware/
-  esp32_firmware.ino     # C++ (Arduino) — motors, encoders, sensors, actuator, serial protocol
+  esp32_firmware.ino     # C++ (Arduino) motors, encoders, sensors, actuator, serial protocol
 python/
   serial_bridge.py       # UART bridge to the ESP32
   vision_classifier.py   # OpenCV: color / size / barcode detection
@@ -36,7 +36,7 @@ python/
 
 ## What's real vs. what needs calibration
 This is a working reference implementation of the *logic and protocol*, not
-a plug-and-play drop-in — before it runs on your actual robot you'll need to:
+a plug and play drop-in before it runs on your actual robot you'll need to:
 - Confirm the pin map against your motor driver / sensor wiring.
 - Calibrate `CM_PER_TICK`, `TICKS_PER_DEGREE`, and the HX711 `set_scale()` factor
   on the real hardware.
