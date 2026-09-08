@@ -33,6 +33,7 @@ WebServer server(80);
 
 const int DRIVE_SPEED = 160;
 const int TURN_SPEED = 140;
+const int CURVE_INNER_SPEED = 70;   // slower wheel on a diagonal arc
 
 volatile long leftTicks = 0;
 volatile long rightTicks = 0;
@@ -67,12 +68,18 @@ const char PAGE_HTML[] PROGMEM = R"rawliteral(
   <h2>Tempest AMR Remote</h2>
 
   <div class="pad">
-    <div></div><button onclick="send('/forward')">&uarr;</button><div></div>
-    <button onclick="send('/left')">&larr;</button>
-    <button class="stop" onclick="send('/stop')">STOP</button>
-    <button onclick="send('/right')">&rarr;</button>
-    <div></div><button onclick="send('/backward')">&darr;</button><div></div>
-  </div>
+  <button onclick="send('/forward_left')">&#8598;</button>
+  <button onclick="send('/forward')">&uarr;</button>
+  <button onclick="send('/forward_right')">&#8599;</button>
+
+  <button onclick="send('/left')">&larr;</button>
+  <button class="stop" onclick="send('/stop')">STOP</button>
+  <button onclick="send('/right')">&rarr;</button>
+
+  <button onclick="send('/backward_left')">&#8601;</button>
+  <button onclick="send('/backward')">&darr;</button>
+  <button onclick="send('/backward_right')">&#8600;</button>
+</div>
 
   <div class="actions">
     <button onclick="send('/pick')">PICK</button>
@@ -120,7 +127,6 @@ void setup() {
   scale.set_scale(420.0);
   if (scale.is_ready()){scale.tare();}
   else{ Serial.println("HX711 not detected, skipping tare");}
-  scale.tare();
   actuator.attach(SERVO_PIN);
   actuator.write(SERVO_DROP_ANGLE);
 
@@ -140,6 +146,10 @@ void setup() {
   server.on("/backward", [](){ driveWhilePressed(-DRIVE_SPEED, -DRIVE_SPEED); });
   server.on("/left", [](){ driveWhilePressed(-TURN_SPEED, TURN_SPEED); });
   server.on("/right", [](){ driveWhilePressed(TURN_SPEED, -TURN_SPEED); });
+server.on("/forward_left",  [](){ driveWhilePressed(CURVE_INNER_SPEED, DRIVE_SPEED); });
+server.on("/forward_right", [](){ driveWhilePressed(DRIVE_SPEED, CURVE_INNER_SPEED); });
+server.on("/backward_left", [](){ driveWhilePressed(-CURVE_INNER_SPEED, -DRIVE_SPEED); });
+server.on("/backward_right",[](){ driveWhilePressed(-DRIVE_SPEED, -CURVE_INNER_SPEED); });
   server.on("/stop", [](){ stopMotors(); server.send(200, "text/plain", "stopped"); });
   server.on("/pick", handlePick);
   server.on("/drop", handleDrop);
