@@ -269,7 +269,3 @@ int readAttachmentId() {
   if (raw < 2400) return 2;
   if (raw < 3200) return 3;
   return 4;}
-  if (raw < 2400) return 2;
-  if (raw < 3200) return 3;
-  return 4;
-}
