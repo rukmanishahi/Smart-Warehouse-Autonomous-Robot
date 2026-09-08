@@ -76,4 +76,6 @@ a plug and play drop-in before it runs on your actual robot you'll need to:
 #define DROP_CONFIRM_PIN 4
 
 <img width="4096" height="3072" alt="image" src="https://github.com/user-attachments/assets/d77a138c-ef9d-49fd-baca-f8a5fd816da4" />
+<img width="960" height="1280" alt="image" src="https://github.com/user-attachments/assets/0cc8fab2-ab96-4b42-abff-5484d146f2ff" />
+<img width="960" height="1280" alt="image" src="https://github.com/user-attachments/assets/841f7901-fc11-4ca0-a982-dcba31952a3b" />
 
