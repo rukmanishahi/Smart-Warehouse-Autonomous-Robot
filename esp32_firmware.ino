@@ -9,13 +9,19 @@ const char* AP_PASSWORD = "tempest123";  // must be 8+ characters
 
 WebServer server(80);
 
-// ---------------- Pin map (same as main firmware) ----------------
-#define L_IN1 25
-#define L_IN2 26
-#define L_PWM 27
-#define R_IN1 21   // moved off strapping pin 12
-#define R_IN2 22
-#define R_PWM 13
+// ---------------- Pin map (updated for BTS7960 dual H-bridge drivers) ----------------
+// BTS7960 uses RPWM/LPWM (direction is encoded in which pin is driven) plus
+// R_EN/L_EN enable lines, instead of the IN1/IN2/PWM scheme of an L298N-style driver.
+#define L_RPWM 25
+#define L_LPWM 26
+#define L_R_EN 27   // tie R_EN+L_EN together per side if you don't need a software kill switch
+#define L_L_EN 14   // spare GPIO — pick any free pin; wire straight to 3.3V instead if you prefer
+
+#define R_RPWM 21   // moved off strapping pin 12
+#define R_LPWM 22
+#define R_R_EN 13
+#define R_L_EN 15   // NOTE: 15 is a strapping pin on some boards — swap if boot issues appear
+
 #define L_ENC_A 34
 #define L_ENC_B 35
 #define R_ENC_A 32
@@ -111,8 +117,15 @@ const char PAGE_HTML[] PROGMEM = R"rawliteral(
 void setup() {
   Serial.begin(115200);
 
-  pinMode(L_IN1, OUTPUT); pinMode(L_IN2, OUTPUT); pinMode(L_PWM, OUTPUT);
-  pinMode(R_IN1, OUTPUT); pinMode(R_IN2, OUTPUT); pinMode(R_PWM, OUTPUT);
+  pinMode(L_RPWM, OUTPUT); pinMode(L_LPWM, OUTPUT);
+  pinMode(L_R_EN, OUTPUT); pinMode(L_L_EN, OUTPUT);
+  pinMode(R_RPWM, OUTPUT); pinMode(R_LPWM, OUTPUT);
+  pinMode(R_R_EN, OUTPUT); pinMode(R_L_EN, OUTPUT);
+
+  // Enable both bridges. If you wired EN straight to 3.3V instead of a GPIO,
+  // you can remove these four lines.
+  digitalWrite(L_R_EN, HIGH); digitalWrite(L_L_EN, HIGH);
+  digitalWrite(R_R_EN, HIGH); digitalWrite(R_L_EN, HIGH);
 
   pinMode(L_ENC_A, INPUT); pinMode(L_ENC_B, INPUT);
   pinMode(R_ENC_A, INPUT); pinMode(R_ENC_B, INPUT);
@@ -223,15 +236,31 @@ void handleStatus() {
   server.send(200, "text/plain", msg);
 }
 
-// ---------------- Motion + sensing (same logic as main firmware) ----------------
+// ---------------- Motion + sensing (updated for BTS7960) ----------------
+// BTS7960 direction is set by which channel gets PWM:
+//   forward -> RPWM = speed, LPWM = 0
+//   reverse -> RPWM = 0, LPWM = speed
 void setMotors(int leftSpeed, int rightSpeed) {
-  digitalWrite(L_IN1, leftSpeed >= 0);
-  digitalWrite(L_IN2, leftSpeed < 0);
-  analogWrite(L_PWM, abs(leftSpeed));
+  leftSpeed = constrain(leftSpeed, -255, 255);
+  rightSpeed = constrain(rightSpeed, -255, 255);
 
-  digitalWrite(R_IN1, rightSpeed >= 0);
-  digitalWrite(R_IN2, rightSpeed < 0);
-  analogWrite(R_PWM, abs(rightSpeed));}
+  if (leftSpeed >= 0) {
+    analogWrite(L_RPWM, leftSpeed);
+    analogWrite(L_LPWM, 0);
+  } else {
+    analogWrite(L_RPWM, 0);
+    analogWrite(L_LPWM, -leftSpeed);
+  }
+
+  if (rightSpeed >= 0) {
+    analogWrite(R_RPWM, rightSpeed);
+    analogWrite(R_LPWM, 0);
+  } else {
+    analogWrite(R_RPWM, 0);
+    analogWrite(R_LPWM, -rightSpeed);
+  }
+}
+
 void stopMotors() { setMotors(0, 0); }
 
 float readDistanceCm() {
