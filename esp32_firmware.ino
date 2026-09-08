@@ -118,6 +118,8 @@ void setup() {
 
   scale.begin(HX711_DT, HX711_SCK);
   scale.set_scale(420.0);
+  if (scale.is_ready()){scale.tare();}
+  else{ Serial.println("HX711 not detected, skipping tare");}
   scale.tare();
   actuator.attach(SERVO_PIN);
   actuator.write(SERVO_DROP_ANGLE);
