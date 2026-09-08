@@ -41,6 +41,8 @@ Servo actuator;
 
 void IRAM_ATTR onLeftEncoder()  { leftTicks  += digitalRead(L_ENC_B) ? 1 : -1; }
 void IRAM_ATTR onRightEncoder() { rightTicks += digitalRead(R_ENC_B) ? 1 : -1; }
+bool driveForwardCm(float distanceCm, int speed = 150);
+bool turnDeg(float angleDeg, int speed = 130);
 
 // ---------------- The web page (HTML + CSS + JS, sent as one string) ----------------
 const char PAGE_HTML[] PROGMEM = R"rawliteral(
@@ -180,8 +182,7 @@ void handleDrop() {
   bool confirmed = false;
   while (millis() - start < 1500) {
     if (digitalRead(DROP_CONFIRM_PIN) == LOW) { confirmed = true; break; }
-    delay(20);
-  }
+    delay(20);}
   server.send(200, "text/plain", confirmed ? "dropped" : "drop not confirmed");
 }
 
@@ -218,9 +219,7 @@ void setMotors(int leftSpeed, int rightSpeed) {
 
   digitalWrite(R_IN1, rightSpeed >= 0);
   digitalWrite(R_IN2, rightSpeed < 0);
-  analogWrite(R_PWM, abs(rightSpeed));
-}
-
+  analogWrite(R_PWM, abs(rightSpeed));}
 void stopMotors() { setMotors(0, 0); }
 
 float readDistanceCm() {
@@ -232,7 +231,7 @@ float readDistanceCm() {
   return duration * 0.0343 / 2.0;
 }
 
-bool driveForwardCm(float distanceCm, int speed = 150) {
+bool driveForwardCm(float distanceCm, int speed) {
   const float WHEEL_DIAMETER_CM = 6.5;
   const int ENCODER_TICKS_PER_REV = 20;
   const float CM_PER_TICK = (PI * WHEEL_DIAMETER_CM) / ENCODER_TICKS_PER_REV;
@@ -252,25 +251,24 @@ bool driveForwardCm(float distanceCm, int speed = 150) {
   return true;
 }
 
-bool turnDeg(float angleDeg, int speed = 130) {
+bool turnDeg(float angleDeg, int speed) {
   const float TICKS_PER_DEGREE = 1.1;
   long targetTicks = abs(angleDeg) * TICKS_PER_DEGREE;
   leftTicks = 0; rightTicks = 0;
 
   int dir = (angleDeg >= 0) ? 1 : -1;
   setMotors(dir * speed, -dir * speed);
-
   while (abs((abs(leftTicks) + abs(rightTicks)) / 2) < targetTicks) {
-    delay(10);
-  }
+    delay(10);}
   stopMotors();
-  return true;
-}
-
+  return true;}
 int readAttachmentId() {
   int raw = analogRead(ATTACH_ID_PIN);
   if (raw < 800)  return 0;
   if (raw < 1600) return 1;
+  if (raw < 2400) return 2;
+  if (raw < 3200) return 3;
+  return 4;}
   if (raw < 2400) return 2;
   if (raw < 3200) return 3;
   return 4;
