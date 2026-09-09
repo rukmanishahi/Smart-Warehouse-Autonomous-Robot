@@ -10,17 +10,15 @@ const char* AP_PASSWORD = "tempest123";  // must be 8+ characters
 WebServer server(80);
 
 // ---------------- Pin map (updated for BTS7960 dual H-bridge drivers) ----------------
-// BTS7960 uses RPWM/LPWM (direction is encoded in which pin is driven) plus
-// R_EN/L_EN enable lines, instead of the IN1/IN2/PWM scheme of an L298N-style driver.
 #define L_RPWM 25
 #define L_LPWM 26
-#define L_R_EN 27   // tie R_EN+L_EN together per side if you don't need a software kill switch
-#define L_L_EN 14   // spare GPIO — pick any free pin; wire straight to 3.3V instead if you prefer
+#define L_R_EN 27
+#define L_L_EN 14
 
-#define R_RPWM 21   // moved off strapping pin 12
+#define R_RPWM 21
 #define R_LPWM 22
 #define R_R_EN 13
-#define R_L_EN 15   // NOTE: 15 is a strapping pin on some boards — swap if boot issues appear
+#define R_L_EN 15
 
 #define L_ENC_A 34
 #define L_ENC_B 35
@@ -32,17 +30,23 @@ WebServer server(80);
 #define HX711_DT 19
 #define HX711_SCK 23
 #define ATTACH_ID_PIN 36
-#define SERVO_PIN 2   // moved off strapping pin 15
+#define SERVO_PIN 2
 #define SERVO_PICK_ANGLE 120
 #define SERVO_DROP_ANGLE 20
 #define DROP_CONFIRM_PIN 4
 
 const int DRIVE_SPEED = 160;
 const int TURN_SPEED = 140;
-const int CURVE_INNER_SPEED = 70;   // slower wheel on a diagonal arc
+const int CURVE_INNER_SPEED = 70;
 
 volatile long leftTicks = 0;
 volatile long rightTicks = 0;
+
+// NEW: tracks what the robot is currently commanded to do, so loop() can
+// keep checking for obstacles even while the motors are left running.
+volatile int currentLeftSpeed = 0;
+volatile int currentRightSpeed = 0;
+
 HX711 scale;
 Servo actuator;
 
@@ -51,7 +55,6 @@ void IRAM_ATTR onRightEncoder() { rightTicks += digitalRead(R_ENC_B) ? 1 : -1; }
 bool driveForwardCm(float distanceCm, int speed = 150);
 bool turnDeg(float angleDeg, int speed = 130);
 
-// ---------------- The web page (HTML + CSS + JS, sent as one string) ----------------
 const char PAGE_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
 <html>
@@ -122,8 +125,6 @@ void setup() {
   pinMode(R_RPWM, OUTPUT); pinMode(R_LPWM, OUTPUT);
   pinMode(R_R_EN, OUTPUT); pinMode(R_L_EN, OUTPUT);
 
-  // Enable both bridges. If you wired EN straight to 3.3V instead of a GPIO,
-  // you can remove these four lines.
   digitalWrite(L_R_EN, HIGH); digitalWrite(L_L_EN, HIGH);
   digitalWrite(R_R_EN, HIGH); digitalWrite(R_L_EN, HIGH);
 
@@ -145,7 +146,6 @@ void setup() {
 
   stopMotors();
 
-  // Start WiFi Access Point
   WiFi.softAP(AP_SSID, AP_PASSWORD);
   Serial.println("Access Point started");
   Serial.print("Connect to WiFi '");
@@ -153,17 +153,22 @@ void setup() {
   Serial.println("' then open this IP in a browser:");
   Serial.println(WiFi.softAPIP());
 
-  // Route setup
+  // Route setup — direction routes now just START motion, they don't block/stop it
   server.on("/", handleRoot);
-  server.on("/forward", [](){ driveWhilePressed(DRIVE_SPEED, DRIVE_SPEED); });
-  server.on("/backward", [](){ driveWhilePressed(-DRIVE_SPEED, -DRIVE_SPEED); });
-  server.on("/left", [](){ driveWhilePressed(-TURN_SPEED, TURN_SPEED); });
-  server.on("/right", [](){ driveWhilePressed(TURN_SPEED, -TURN_SPEED); });
-server.on("/forward_left",  [](){ driveWhilePressed(CURVE_INNER_SPEED, DRIVE_SPEED); });
-server.on("/forward_right", [](){ driveWhilePressed(DRIVE_SPEED, CURVE_INNER_SPEED); });
-server.on("/backward_left", [](){ driveWhilePressed(-CURVE_INNER_SPEED, -DRIVE_SPEED); });
-server.on("/backward_right",[](){ driveWhilePressed(-DRIVE_SPEED, -CURVE_INNER_SPEED); });
-  server.on("/stop", [](){ stopMotors(); server.send(200, "text/plain", "stopped"); });
+  server.on("/forward",       [](){ startMoving(DRIVE_SPEED, DRIVE_SPEED); });
+  server.on("/backward",      [](){ startMoving(-DRIVE_SPEED, -DRIVE_SPEED); });
+  server.on("/left",          [](){ startMoving(-TURN_SPEED, TURN_SPEED); });
+  server.on("/right",         [](){ startMoving(TURN_SPEED, -TURN_SPEED); });
+  server.on("/forward_left",  [](){ startMoving(CURVE_INNER_SPEED, DRIVE_SPEED); });
+  server.on("/forward_right", [](){ startMoving(DRIVE_SPEED, CURVE_INNER_SPEED); });
+  server.on("/backward_left", [](){ startMoving(-CURVE_INNER_SPEED, -DRIVE_SPEED); });
+  server.on("/backward_right",[](){ startMoving(-DRIVE_SPEED, -CURVE_INNER_SPEED); });
+  server.on("/stop",          [](){
+    currentLeftSpeed = 0;
+    currentRightSpeed = 0;
+    stopMotors();
+    server.send(200, "text/plain", "stopped");
+  });
   server.on("/pick", handlePick);
   server.on("/drop", handleDrop);
   server.on("/move", handleMoveToBin);
@@ -173,6 +178,17 @@ server.on("/backward_right",[](){ driveWhilePressed(-DRIVE_SPEED, -CURVE_INNER_S
 
 void loop() {
   server.handleClient();
+
+  // While driving forward (or forward-curving), keep polling the ultrasonic
+  // sensor every loop and cut the motors the instant something gets close.
+  // This is what "continuous drive" needs that a single reading at button-press
+  // time didn't give you.
+  if ((currentLeftSpeed > 0 || currentRightSpeed > 0) &&
+      readDistanceCm() < OBSTACLE_STOP_CM) {
+    stopMotors();
+    currentLeftSpeed = 0;
+    currentRightSpeed = 0;
+  }
 }
 
 // ---------------- Web handlers ----------------
@@ -180,19 +196,22 @@ void handleRoot() {
   server.send_P(200, "text/html", PAGE_HTML);
 }
 
-// Simple "press and it moves briefly" behavior — safer for a browser button
-// than a true press-and-hold, and avoids needing WebSockets for a first version.
-void driveWhilePressed(int leftSpeed, int rightSpeed) {
-  float dist = readDistanceCm();
-  if (dist < OBSTACLE_STOP_CM && (leftSpeed > 0 || rightSpeed > 0)) {
+// Starts the robot moving in a direction and returns immediately — it will
+// keep moving at this speed until /stop is hit (or an obstacle stops it),
+// instead of only running for a fixed 400ms burst per click.
+void startMoving(int leftSpeed, int rightSpeed) {
+  bool isForward = (leftSpeed > 0 || rightSpeed > 0);
+  if (isForward && readDistanceCm() < OBSTACLE_STOP_CM) {
     stopMotors();
+    currentLeftSpeed = 0;
+    currentRightSpeed = 0;
     server.send(200, "text/plain", "blocked: obstacle ahead");
     return;
   }
+  currentLeftSpeed = leftSpeed;
+  currentRightSpeed = rightSpeed;
   setMotors(leftSpeed, rightSpeed);
-  delay(400);   // move for 0.4s per tap — tap repeatedly to keep going
-  stopMotors();
-  server.send(200, "text/plain", "ok");
+  server.send(200, "text/plain", "moving");
 }
 
 void handlePick() {
@@ -217,7 +236,6 @@ void handleMoveToBin() {
     return;
   }
   int bin = server.arg("bin").toInt();
-  // Same simple preset positions as the serial version — tune per bin layout.
   float forward_cm = 60;
   float turn_deg = (bin == 2) ? 90 : (bin == 3) ? -90 : 0;
 
@@ -237,9 +255,6 @@ void handleStatus() {
 }
 
 // ---------------- Motion + sensing (updated for BTS7960) ----------------
-// BTS7960 direction is set by which channel gets PWM:
-//   forward -> RPWM = speed, LPWM = 0
-//   reverse -> RPWM = 0, LPWM = speed
 void setMotors(int leftSpeed, int rightSpeed) {
   leftSpeed = constrain(leftSpeed, -255, 255);
   rightSpeed = constrain(rightSpeed, -255, 255);
@@ -303,6 +318,7 @@ bool turnDeg(float angleDeg, int speed) {
     delay(10);}
   stopMotors();
   return true;}
+
 int readAttachmentId() {
   int raw = analogRead(ATTACH_ID_PIN);
   if (raw < 800)  return 0;
